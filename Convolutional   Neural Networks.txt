@@ -1,0 +1,340 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+#                                     Convolutional Neural Networks
+
+# Preparing data
+
+# In[88]:
+
+
+import pandas as pd
+import numpy as np
+from random import randint
+from sklearn.utils import shuffle
+from sklearn.preprocessing import normalize
+import csv
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import  Activation, Dense, Flatten, BatchNormalization, Conv2D, MaxPool2D
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.metrics import categorical_crossentropy
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+get_ipython().run_line_magic('matplotlib', 'inline')
+from sklearn.metrics import confusion_matrix
+import itertools
+import os
+import shutil
+import random
+import glob
+import matplotlib.pyplot as plt
+import warnings
+warnings.simplefilter(action = 'ignore', category = FutureWarning)
+
+
+# In[89]:
+
+
+os.chdir('C:\\Users\\joe62\\Downloads\\CNN\\Cats and Dogs')
+if  os.path.isdir ('Train/dog') is False:
+    os.makedirs ('Train/dog')
+    os.makedirs ('Test/dog')
+    os.makedirs ('Valid/dog')
+    os.makedirs ('Train/cat')
+    os.makedirs ('Test/cat')
+    os.makedirs ('Valid/cat')
+    
+    
+    for c in random.sample (glob.glob ('Dog*'), 500):
+        shutil.move (c, 'Train/dog')
+    for c in random.sample (glob.glob ('Cat*'), 500):
+        shutil.move (c, 'Train/cat')
+    for c in random.sample (glob.glob ('Dog*'), 100):
+        shutil.move (c, 'Test/dog')
+    for c in random.sample (glob.glob ('Cat*'), 100):
+        shutil.move (c, 'Test/cat')
+    for c in random.sample (glob.glob ('Dog*'), 50):
+        shutil.move (c, 'Valid/dog')
+    for c in random.sample (glob.glob ('Dog*'), 50):
+        shutil.move (c, 'Valid/cat')
+        
+os.chdir('../../')
+    
+
+
+# In[90]:
+
+
+train_path = "CNN\\Cats and Dogs\\Train"
+test_path = "CNN\\Cats and Dogs\\Test"
+valid_path = "CNN\\Cats and Dogs\\Valid"
+
+
+# Preprocessing of data
+
+# In[91]:
+
+
+train_batches = ImageDataGenerator (preprocessing_function = tf.keras.applications.vgg16.preprocess_input) \
+    .flow_from_directory(directory = train_path, target_size = (224, 224), classes = [ 'Cat', 'Dog'], batch_size = 10 )
+valid_batches = ImageDataGenerator (preprocessing_function = tf.keras.applications.vgg16.preprocess_input) \
+    .flow_from_directory(directory =valid_path, target_size = (224, 224), classes = [ 'Cat', 'Dog'], batch_size = 10 )
+test_batches = ImageDataGenerator (preprocessing_function = tf.keras.applications.vgg16.preprocess_input) \
+    .flow_from_directory(directory =test_path, target_size = (224, 224), classes = [ 'Cat', 'Dog'], batch_size = 10 )
+
+assert train_batches.n == 1000
+assert valid_batches.n == 100
+assert test_batches.n == 200
+assert train_batches.num_classes == valid_batches.num_classes == test_batches.num_classes == 2
+# In[92]:
+
+
+imgs, labels = next(train_batches)
+
+
+# In[93]:
+
+
+# This function will plot images in the form of a grid which 1 row and 10 columns where images are place
+def plotImages (Images_arr) :
+    figs, axes = plt.subplots ( 1, 10, figsize = (20,20))
+    axes = axes.flatten()
+    for img, ax in zip (Images_arr, axes):
+        ax.imshow (img)
+        ax.axis ('off')
+    plt.tight_layout()
+    plt.show()
+                            
+                               
+
+
+# In[94]:
+
+
+plotImages(imgs)
+print(labels)
+
+
+# CNN Model 
+
+# In[95]:
+
+
+model = Sequential ([
+    Conv2D(filters =32, kernel_size = (3,3), activation = 'relu', padding = 'same', input_shape = (224,224,3)),
+    MaxPool2D(pool_size = (2, 2), strides = 2),
+    Conv2D(filters =64, kernel_size = (3,3), activation = 'relu', padding = 'same'),
+    MaxPool2D(pool_size = (2, 2), strides = 2),
+    Flatten(),
+    Dense(units =2, activation = 'softmax'),
+    
+])
+
+
+# In[96]:
+
+
+model.summary ()
+
+
+# In[97]:
+
+
+model.compile(optimizer = Adam (learning_rate = 0.0001), loss = "categorical_crossentropy", metrics = ["accuracy"])
+
+
+# In[98]:
+
+
+model.fit(x= train_batches, validation_data = valid_batches, batch_size = 32, epochs = 10, verbose = 2)
+
+
+#     Predicting using the CNN model
+
+# In[99]:
+
+
+test_imgs, test_labels = next(test_batches)
+plotImages(test_imgs)
+print(test_labels)
+
+
+# In[100]:
+
+
+test_batches.classes
+
+
+# In[101]:
+
+
+predictions = model.predict(x=test_batches, verbose = 0)
+
+
+# In[102]:
+
+
+np.round (predictions)
+
+
+# Evaluating the model
+
+# In[103]:
+
+
+cm = confusion_matrix(y_true =test_batches.classes, y_pred =np.argmax(predictions, axis = -1))
+print(cm)
+
+
+# In[104]:
+
+
+def plot_confusion_matrix(cm, classes, 
+                          normalize= False, 
+                          title = 'Confusion matrix', 
+                          cmap=plt.cm.Blues):
+    plt.imshow(cm, interpolation = 'nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+    if normalize:
+        cm=cm.astype('float')/ cm.sum(axis=1)[:, np.newaxis]
+        print('Normalized confusion matrix' ),
+    else:
+            print('Confusion matrix, without normalization' )
+    print(cm)
+    
+    thresh = cm.max() /2.
+    for i,j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, cm[i,j],
+                horizontalalignment= "center",
+                 color = "white" if cm[i,j] > thresh else "black")
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+
+# In[105]:
+
+
+test_batches.class_indices
+
+
+# In[106]:
+
+
+cm_plot_labels = ['cat', 'dog'] 
+plot_confusion_matrix(cm=cm, classes=cm_plot_labels, title = 'Confusion Matrix')
+
+
+# Build Fine tune VGG16 model
+
+# In[107]:
+
+
+#Download VGG16 model
+VGG16_model = tf.keras.applications.vgg16.VGG16()
+
+
+# In[108]:
+
+
+VGG16_model.summary()
+
+
+# In[109]:
+
+
+type (VGG16_model)
+
+
+# In[110]:
+
+
+model = Sequential ()
+for layer in VGG16_model.layers [: -1]:
+    model.add (layer)
+
+
+# In[111]:
+
+
+model.summary ()
+
+
+# In[112]:
+
+
+for layer in model.layers :
+    layer.trainable = False
+
+
+# In[113]:
+
+
+model.add (Dense (units =2, activation = 'softmax'))
+
+
+# In[114]:
+
+
+model.summary ()
+
+
+#  Train the Fine- tunned VGG16 model
+
+# In[115]:
+
+
+model.compile(optimizer = Adam (learning_rate = 0.0001), loss = "categorical_crossentropy", metrics = ["accuracy"])
+
+
+# In[116]:
+
+
+model.fit(x= train_batches, validation_data = valid_batches, batch_size = 32, epochs = 5, verbose = 2)
+
+
+# In[118]:
+
+
+assert model.history.history.get ('accuracy') [-1] > 0.95
+
+
+# Predicting using fine-tune VGG16 model
+
+# In[119]:
+
+
+predictions = model.predict(x=test_batches, verbose = 0)
+
+
+# In[120]:
+
+
+test_batches.classes
+
+
+# In[121]:
+
+
+cm = confusion_matrix(y_true =test_batches.classes, y_pred =np.argmax(predictions, axis = -1))
+print(cm)
+
+
+# In[122]:
+
+
+cm_plot_labels = ['cat', 'dog'] 
+plot_confusion_matrix(cm=cm, classes=cm_plot_labels, title = 'Confusion Matrix')
+
+
+# In[ ]:
+
+
+
+
+
